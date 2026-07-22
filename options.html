@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, "Microsoft YaHei", sans-serif; max-width: 600px; margin: 24px auto; padding: 0 16px; color: #222; }
+    h2 { font-size: 18px; margin-bottom: 2px; }
+    .section { border: 1px solid #e8e8e8; border-radius: 10px; padding: 16px 20px; margin: 14px 0; background: #fafafa; }
+    .section h3 { margin: 0 0 10px; font-size: 15px; color: #333; }
+
+    label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 6px; color: #444; }
+    input[type=number] { width: 80px; padding: 6px; font-size: 14px; border: 1px solid #ddd; border-radius: 5px; }
+    textarea { width: 100%; height: 70px; padding: 8px; font-size: 12.5px; box-sizing: border-box;
+               font-family: monospace; border: 1px solid #ddd; border-radius: 5px; resize: vertical; }
+    .hint { font-size: 12px; color: #999; margin-top: 4px; line-height: 1.55; }
+    .hint code { background: #f0f0f0; padding: 1px 5px; border-radius: 4px; font-family: monospace; color: #333; }
+
+    .btn-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+    .btn {
+      padding: 7px 18px; border: none; border-radius: 6px; background: #e6162d; color: #fff;
+      font-size: 13px; cursor: pointer; transition: opacity .15s; white-space: nowrap;
+    }
+    .btn:active, .btn:hover { opacity: .85; }
+    .btn.btn-sm { padding: 5px 14px; font-size: 12px; background: #555; }
+    .btn.btn-blue { background: #1677ff; }
+    .btn:disabled { background: #bbb; cursor: not-allowed; opacity: .65; }
+
+    /* 登录状态 */
+    #login-status { font-size: 13px; margin-top: 8px; padding: 8px 12px; border-radius: 6px; display: none; }
+    #login-status.ok { background: #eafff0; color: #1a8a3c; display: block; }
+    #login-status.err { background: #fff0ef; color: #c00; display: block; }
+
+    /* 特别关注列表 */
+    #group-list { margin-top: 10px; }
+    .user-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #eee; font-size: 13px; }
+    .user-item:last-child { border-bottom: none; }
+    .user-item input[type=checkbox] { width: 17px; height: 17px; accent-color: #e6162d; cursor: pointer; }
+    .user-name { font-weight: 500; color: #222; }
+    .user-id { color: #aaa; font-size: 11.5px; font-family: monospace; }
+    .group-empty { color: #999; font-size: 12.5px; padding: 12px 0; text-align: center; }
+    .select-all { font-size: 12px; color: #666; margin-top: 4px; cursor: pointer; user-select: none; }
+    .select-all input { vertical-align: middle; margin-right: 3px; }
+
+    #status { font-size: 13px; color: #1a8a3c; margin-left: 10px; font-weight: 600; }
+    .ft-note { font-size: 11.5px; color: #bbb; margin-top: 22px; line-height: 1.5; }
+
+    /* 加载中 */
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #ddd;
+      border-top-color: #e6162d; border-radius: 50%; animation: spin .6s linear infinite;
+      vertical-align: -2px; margin-left: 6px; }
+    @keyframes spin { to{ transform: rotate(360deg); } }
+
+    /* 高亮提示 */
+    .highlight-box { background: #eef6ff; border: 1px solid #b3d8ff; border-radius: 8px; padding: 10px 14px; margin: 10px 0; font-size: 13px; color: #1a56a8; line-height: 1.55; }
+  </style>
+</head>
+<body>
+  <h2>⚙️ 雪球特别关注 新帖提醒 · 设置</h2>
+
+  <!-- ===== 第一步：登录检测 ===== -->
+  <div class="section">
+    <h3>① 登录状态</h3>
+
+    <div class="highlight-box">
+      <b>推荐方式（零配置）：</b>确保 Chrome 已打开并登录了 <a href="https://xueqiu.com" target="_blank">xueqiu.com</a>，
+      然后直接点下方「自动检测」按钮。扩展会通过你已打开的雪球页面自动获取登录态，<b>不需要复制任何 Cookie</b>。
+    </div>
+
+    <div class="btn-row">
+      <button id="btn-login" class="btn btn-blue">🔍 自动检测登录（推荐）</button>
+      <span id="login-spinner"></span>
+    </div>
+    <div id="login-status"></div>
+
+    <details style="margin-top:10px;">
+      <summary style="cursor:pointer;font-size:12px;color:#888;">⚙️ 高级：手动粘贴 Cookie（一般不需要）</summary>
+      <div style="margin-top:6px;">
+        <textarea id="cookie" placeholder="仅在自动检测失败时使用&#10;F12 → Network → 任选请求 → 复制 Cookie: 整行"></textarea>
+        <div class="hint">粘贴后点上方「自动检测」即可，会优先使用你粘贴的 Cookie。</div>
+      </div>
+    </details>
+  </div>
+
+  <!-- ===== 第二步：读取特别关注分组 ===== -->
+  <div class="section">
+    <h3>② 选择要监控的博主</h3>
+    <div class="btn-row">
+      <button id="btn-group" class="btn btn-blue">📋 读取特别关注分组</button>
+      <span id="group-spinner"></span>
+      <label class="select-all"><input type="checkbox" id="sel-all"> 全选 / 全不选</label>
+    </div>
+    <div id="group-list">
+      <div class="group-empty">请先完成上方的「① 登录状态」检测，然后点此按钮。</div>
+    </div>
+    <div class="hint">从你的「特别关注」分组自动拉取成员，勾选想监控的人。</div>
+  </div>
+
+  <!-- ===== 第三步：参数设置 ===== -->
+  <div class="section">
+    <h3>③ 参数设置</h3>
+
+    <label>轮询间隔（分钟）</label>
+    <input type="number" id="interval" min="1" max="60" step="1" value="2">
+    <div class="hint">建议 1–10 分钟，默认 2 分钟。</div>
+
+    <label>声音提示</label>
+    <div style="font-size:13px;">
+      <label style="display:inline;font-weight:400;margin:0;"><input type="checkbox" id="sound"> 新帖时播放提示音</label>
+    </div>
+
+    <label>手动补充名单（可选）</label>
+    <textarea id="manual" placeholder="额外想监控的 user_id，逗号或换行分隔"></textarea>
+
+    <div style="margin-top:16px;">
+      <button id="save" class="btn">💾 保存所有设置</button>
+      <span id="status"></span>
+    </div>
+  </div>
+
+  <!-- ===== 第四步：企业微信推送 ===== -->
+  <div class="section">
+    <h3>④ 企业微信推送（推到个人微信）</h3>
+    <label style="display:inline;font-weight:400;margin:0 0 8px;">
+      <input type="checkbox" id="wecom-enabled"> 启用企业微信推送（新帖同时发到我的微信）
+    </label>
+    <div class="hint" style="margin-bottom:8px;">
+      需在企业微信后台<b>自建一个应用</b>，拿到 CorpID / Secret / AgentID，并把你自己的账号加进应用可见范围。
+      最终消息会进你的<b>个人微信</b>（前提：该应用已开启「在微信插件中接收」）。详细步骤见下方 README。
+    </div>
+
+    <label>CorpID（企业 ID）</label>
+    <input type="text" id="wecom-corpid" style="width:100%;padding:6px;font-size:13px;border:1px solid #ddd;border-radius:5px;box-sizing:border-box;">
+
+    <label>Secret（应用密钥）</label>
+    <input type="text" id="wecom-secret" style="width:100%;padding:6px;font-size:13px;border:1px solid #ddd;border-radius:5px;box-sizing:border-box;">
+
+    <label>AgentID（应用 ID）</label>
+    <input type="text" id="wecom-agentid" style="width:100%;padding:6px;font-size:13px;border:1px solid #ddd;border-radius:5px;box-sizing:border-box;">
+
+    <label>接收人 UserID（留空 = 应用内所有人）</label>
+    <input type="text" id="wecom-touser" style="width:100%;padding:6px;font-size:13px;border:1px solid #ddd;border-radius:5px;box-sizing:border-box;" placeholder="如 zhangsan，多个用 | 分隔">
+
+    <div class="hint" style="color:#c0392b;">⚠️ Secret 属于敏感凭证，仅保存在你本机浏览器，不会上传任何服务器。</div>
+
+    <div class="btn-row">
+      <button id="btn-wecom-test" class="btn btn-sm btn-blue">📤 测试企微推送</button>
+      <span id="wecom-test-status" style="font-size:12.5px;"></span>
+    </div>
+  </div>
+
+  <!-- ===== 诊断 ===== -->
+  <div class="section">
+    <h3>🔧 诊断（检测不到登录时用）</h3>
+    <div class="btn-row">
+      <button id="btn-diag" class="btn btn-sm">🔧 一键诊断</button>
+      <button id="btn-copy-diag" class="btn btn-sm" style="background:#555;">📋 复制报告</button>
+      <button id="btn-test" class="btn btn-sm" style="background:#e6162d;">📢 发送测试提醒</button>
+      <span id="diag-spinner"></span>
+    </div>
+    <div class="hint">点「一键诊断」会逐条测试登录态获取的每一环（标签页 / content script / Cookie / 完整请求），把结果显示在下方。点「复制报告」把内容发给我即可定位问题。</div>
+    <pre id="diag-out" style="white-space:pre-wrap;background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:6px;font-size:11.5px;line-height:1.5;max-height:360px;overflow:auto;display:none;margin-top:10px;"></pre>
+  </div>
+
+  <!-- ===== 运行日志 ===== -->
+  <div class="section">
+    <h3>📜 运行日志（出问题时发我）</h3>
+    <div class="btn-row">
+      <button id="btn-log-refresh" class="btn btn-sm">🔄 刷新</button>
+      <button id="btn-log-copy" class="btn btn-sm" style="background:#555;">📋 复制日志</button>
+      <button id="btn-log-download" class="btn btn-sm" style="background:#555;">💾 下载 .txt</button>
+      <button id="btn-log-clear" class="btn btn-sm" style="background:#aaa;">🗑 清空</button>
+      <span id="log-count" style="font-size:12px;color:#999;"></span>
+    </div>
+    <div class="hint">扩展后台运行时会自动记录每一步：轮询触发、取数走了哪条路径、弹窗定位坐标、每条错误。<b>错误日志永久保留（不会被轮询冲刷掉），点「📋 复制日志」后即清空</b>。复制或下载后发我，我能直接定位问题。日志只存在你本机。</div>
+    <pre id="log-out" style="white-space:pre-wrap;background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:6px;font-size:11.5px;line-height:1.5;max-height:360px;overflow:auto;display:none;margin-top:10px;"></pre>
+  </div>
+
+  <!-- ===== 关于 / 版权 / 联系 ===== -->
+  <div class="section">
+    <h3>ℹ️ 关于与版权</h3>
+    <div style="font-size:13px;line-height:1.75;">
+      <div><b>名称：</b>雪球特别关注 新帖提醒</div>
+      <div><b>版本：</b><span id="about-ver">—</span></div>
+      <div><b>作者：</b>下一站澳门</div>
+      <div><b>联系方式：</b>GitHub：<a href="https://github.com/JohnWish1590/xueqiu-special-follow-notifier" target="_blank" rel="noopener">https://github.com/JohnWish1590/xueqiu-special-follow-notifier</a> ｜ 微博：@下一站澳门</div>
+      <div><b>源码：</b><a href="https://github.com/JohnWish1590/xueqiu-special-follow-notifier" target="_blank" rel="noopener">https://github.com/JohnWish1590/xueqiu-special-follow-notifier</a></div>
+      <div style="margin-top:10px;color:#888;font-size:12px;">
+        © 2026 下一站澳门. 保留所有权利。<br>
+        本扩展仅供个人学习使用，与雪球（xueqiu.com）官方无任何隶属或合作关系。<br>
+        雪球及相关标识归其各自权利人所有。
+      </div>
+    </div>
+  </div>
+
+  <div class="ft-note">
+    原理：扩展通过注入到 xueqiu.com 页面的 content script 调 API，浏览器自动携带登录 Cookie。<br>
+    你只需要在 Chrome 里保持 xueqiu.com 已登录即可。若检测不到，请先用上方「一键诊断」定位原因。
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
