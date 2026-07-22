@@ -16,6 +16,10 @@ let tabList = [ { id: 1, status: 'complete', url: 'https://xueqiu.com/' } ];
 let contentScriptEnabled = true; // 控制 content script 路径是否可用
 let scriptingEnabled = true;     // 控制 scripting 注入主路径是否可用
 const captured = {};
+// 可变窗口状态：模拟「上一个 SW 重启遗留的孤儿 alert 弹窗」等场景
+let windowsState = [ { id: 1, focused: true, type: 'normal', left: 0, top: 0, width: 1920, height: 1080 } ];
+const ALERT_URL = 'chrome-extension://EXT_TEST/alert.html';
+function alertWin(id) { return { id, type: 'popup', tabs: [ { url: ALERT_URL } ] }; }
 
 // fetch mock 数据：注意 groups.json 返回【顶层数组】（与真实雪球一致）
 let groupsResponse = [
@@ -104,11 +108,13 @@ const chromeMock = {
     closeDocument: async () => { captured.offscreenClosed = true; },
   },
   windows: {
-    create: async (o) => { captured.win = o; return { id: 999 }; },
+    create: async (o) => { captured.win = o; captured.createCount++; return { id: 999 }; },
     update: async () => ({}),
+    remove: async (id) => { captured.removed.push(id); },
+    get: async (id) => windowsState.find(w => w.id === id) || null,
     onRemoved: { addListener: cb => captured.onWinRemoved = cb },
     getLastFocused: async () => ({ id: 1, focused: true, type: 'normal', left: 0, top: 0, width: 1920, height: 1080 }),
-    getAll: async () => [{ id: 1, focused: true, type: 'normal', left: 0, top: 0, width: 1920, height: 1080 }],
+    getAll: async () => windowsState,
     getCurrent: async () => ({ id: 1, focused: true, type: 'normal', left: 0, top: 0, width: 1920, height: 1080 }),
   },
   system: {
@@ -320,6 +326,37 @@ const assert = (cond, msg) => console.log((cond ? 'PASS ' : 'FAIL ') + msg);
   assert(tw.ok === true, 'testWecom 配置完整 → 返回 ok=true');
   let tw2 = await new Promise(r => captured.onMessage({ type: 'testWecom', cfg: { enabled: true, corpid: '', corpsecret: '', agentid: '' } }, {}, r));
   assert(tw2.ok === false, 'testWecom 配置缺失 → 返回 ok=false');
+
+  console.log('=== 场景12：弹窗不重复创建 + 全部关闭（防回归多窗口堆积 bug） ===');
+  // 先清空可能残留的窗口集合（跨场景隔离，内部会 alertWinIds.clear()）
+  captured.removed = [];
+  await sandbox.closeAllAlertWindows();
+  captured.createCount = 0;
+  captured.removed = [];
+
+  // 模拟 MV3 service worker 重启：内存集合已空，但上辈子开出的 alert 弹窗仍活着（孤儿窗口）
+  windowsState = [ alertWin(777) ];
+  // 连续两次触发开窗口（相当于多次轮询 / 重启后重入）
+  await sandbox.openAlertWindow();
+  await sandbox.openAlertWindow();
+  assert(captured.createCount === 0, '已有孤儿 alert 窗口 → 复用不新建（修复前会堆出几十个）');
+
+  // 再注入一个真正的窗口，依旧不应新建
+  windowsState = [ alertWin(777), alertWin(888) ];
+  captured.createCount = 0;
+  await sandbox.openAlertWindow();
+  assert(captured.createCount === 0, '已有 2 个 alert 窗口 → 仍不新建（复用）');
+
+  // 全部关闭：关掉所有 alert 弹窗（含跨 SW 的孤儿窗口）
+  captured.removed = [];
+  await sandbox.closeAllAlertWindows();
+  assert(captured.removed.includes(777) && captured.removed.includes(888), 'closeAllAlertWindows 关掉了全部 alert 窗口（777+888）');
+
+  // 关闭后再开 → 应新建 1 个
+  windowsState = [ { id: 1, focused: true, type: 'normal', left: 0, top: 0, width: 1920, height: 1080 } ];
+  captured.createCount = 0;
+  await sandbox.openAlertWindow();
+  assert(captured.createCount === 1, '全部关闭后再触发 → 新建 1 个窗口');
 
   console.log('=== 完成 ===');
 })();

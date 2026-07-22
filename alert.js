@@ -112,15 +112,20 @@ function onCardClick(card, group, latest) {
 
 render();
 
-document.getElementById('close').addEventListener('click', () => window.close());
+// 关闭按钮：关掉所有 alert 弹窗（不只是当前这个，顺手清理残留的孤儿窗口）
+document.getElementById('close').addEventListener('click', () => {
+  uiLog('INFO', '点击「关闭」→ 关闭全部弹窗');
+  try { chrome.runtime.sendMessage({ type: 'closeAllAlertWindows' }); } catch (e) {}
+  window.close();
+});
 
-// 全部已读：把 recent 里所有未读标记为已读 → 卡片全滑出 → 关窗
+// 全部已读：标记全部已读 + 关掉所有 alert 弹窗（含跨 SW 重启遗留的窗口）
 document.getElementById('markAll').addEventListener('click', async () => {
-  uiLog('INFO', '点击「全部已读」');
+  uiLog('INFO', '点击「全部已读」→ 标记已读并关闭全部弹窗');
   try {
-    await chrome.runtime.sendMessage({ type: 'markAllRead' });
-  } catch (e) { uiLog('ERROR', '全部已读失败：' + e.message); }
-  // 所有卡片加滑出动画
+    await chrome.runtime.sendMessage({ type: 'closeAllAlerts' });
+  } catch (e) { uiLog('ERROR', '全部已读并关闭失败：' + e.message); }
+  // 所有卡片加滑出动画（后台已标记已读并关闭窗口，这里只是视觉反馈）
   document.querySelectorAll('.card').forEach(c => c.classList.add('read'));
   setTimeout(() => {
     const list = document.getElementById('list');

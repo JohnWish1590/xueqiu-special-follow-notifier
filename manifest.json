@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "雪球特别关注 新帖提醒",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "监测雪球特别关注分组，博主发新帖时在本机弹窗+通知提醒，可选推送到微信。",
   "author": {
     "email": "cheung.cn@gmail.com",

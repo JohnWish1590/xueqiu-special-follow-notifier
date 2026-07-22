@@ -689,7 +689,50 @@ async function closeOffscreen() {
 }
 
 // ---------- 弹窗（贴屏幕右边缘 + 浏览器内容区下方） ----------
-let alertWinId = null;
+// 用「窗口集合 + 真实扫描」维护，而非单一内存变量。
+// 原因：MV3 的 service worker 会被系统频繁重启，内存变量会归零，
+// 但上一辈子 SW 开出来的弹窗仍开着 → 新 SW 误以为没窗口又新建，
+// 半小时就能堆出几十个孤儿窗口。扫描当前真实窗口可跨 SW 重启复用。
+const alertWinIds = new Set();
+
+// 找当前还活着的 alert 弹窗（优先集合，兜底扫全部 popup）
+async function findExistingAlertWin() {
+  for (const id of [...alertWinIds]) {
+    try {
+      const win = await chrome.windows.get(id, { populate: false });
+      if (win) return win;
+      alertWinIds.delete(id);
+    } catch (e) { alertWinIds.delete(id); }
+  }
+  try {
+    const all = await chrome.windows.getAll({ populate: true, windowTypes: ['popup'] });
+    const myId = chrome.runtime.id;
+    for (const w of all || []) {
+      const url = (w.tabs && w.tabs[0] && w.tabs[0].url) || w.url || '';
+      if (url.indexOf('alert.html') !== -1 || (myId && url.indexOf(myId) !== -1 && url.indexOf('alert') !== -1)) {
+        alertWinIds.add(w.id);
+        return w;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
+// 关掉所有 alert 弹窗：集合里的 + 兜底扫到的（覆盖 SW 重启遗留的孤儿窗口）
+async function closeAllAlertWindows() {
+  const ids = [...alertWinIds];
+  for (const id of ids) { try { await chrome.windows.remove(id); } catch (e) {} }
+  alertWinIds.clear();
+  try {
+    const all = await chrome.windows.getAll({ populate: true, windowTypes: ['popup'] });
+    for (const w of all || []) {
+      const url = (w.tabs && w.tabs[0] && w.tabs[0].url) || w.url || '';
+      if (url.indexOf('alert.html') !== -1) {
+        try { await chrome.windows.remove(w.id); } catch (e) {}
+      }
+    }
+  } catch (e) {}
+}
 
 // 拿主屏可用区域（横坐标用这个贴边）
 async function getPrimaryDisplayBounds() {
@@ -726,9 +769,11 @@ const BROWSER_CHROME_HEIGHT = 150;
 
 async function openAlertWindow() {
   try {
-    if (alertWinId != null) {
-      // 已开：聚焦 + 通知页面重渲染最新列表
-      await chrome.windows.update(alertWinId, { focused: true }).catch(() => {});
+    // 关键修复：先真实扫描当前是否已有 alert 弹窗（跨 SW 重启也能复用），
+    // 有就聚焦 + 重渲染，绝不新建第二个 → 杜绝堆出几十个窗口。
+    const existing = await findExistingAlertWin();
+    if (existing) {
+      await chrome.windows.update(existing.id, { focused: true }).catch(() => {});
       try { await chrome.runtime.sendMessage({ type: 'alertRefresh' }); } catch (e) {}
       return;
     }
@@ -754,13 +799,13 @@ async function openAlertWindow() {
     const branch = area && browser ? '屏幕右+浏览器内容区下方' : (area ? '仅屏幕' : '默认');
     log('弹窗定位 → left=' + Math.round(left) + ' top=' + Math.round(top) + ' 策略:' + branch + ' (屏右=' + (area ? area.left + area.width : '?') + ' 浏览器top=' + (browser ? browser.top : '?') + ')');
     const w = await chrome.windows.create(createData);
-    alertWinId = w.id;
+    alertWinIds.add(w.id);
   } catch (e) {
     logErr('弹窗创建失败：', e.message);
   }
 }
-// 窗口被关闭时清理 id，下次可再弹
-chrome.windows.onRemoved.addListener(id => { if (id === alertWinId) alertWinId = null; });
+// 窗口被关闭时从集合移除（跨 SW 重启的孤儿窗口由扫描兜底处理）
+chrome.windows.onRemoved.addListener(id => { alertWinIds.delete(id); });
 
 // ---------- 已读管理 + 3分钟未读完重弹 ----------
 // recent 每条结构：{ id, userId, name, text, ts, read }（read 默认 undefined=未读）
@@ -791,7 +836,8 @@ const REPOP_MS = 3 * 60 * 1000; // 3 分钟
 async function maybeRepopAlert() {
   const unread = await unreadCount();
   if (!unread) return;                       // 全读完了，不重弹
-  if (alertWinId != null) return;            // 窗口开着，不重弹
+  const live = await findExistingAlertWin();
+  if (live) return;                          // 窗口已开着（真实扫描），不重弹 → 复用而非新建
   const { lastNewPostAt } = await chrome.storage.local.get(['lastNewPostAt']);
   if (!lastNewPostAt) return;
   if (Date.now() - lastNewPostAt >= REPOP_MS) {
@@ -999,6 +1045,28 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: false, err: e.message });
       }
     })();
+    return true;
+  }
+  if (msg.type === 'closeAllAlerts') {
+    // 弹窗「全部已读」按钮：标记全部已读 + 关掉所有 alert 弹窗（含跨 SW 孤儿窗口）
+    (async () => {
+      try {
+        const { recent } = await chrome.storage.local.get(['recent']);
+        const items = recent || [];
+        let count = 0;
+        for (const it of items) { if (!it.read) { it.read = true; count++; } }
+        await chrome.storage.local.set({ recent: items });
+        log('全部已读并关闭所有弹窗：标记', count, '条');
+      } catch (e) { logErr('closeAllAlerts 标记已读失败：', e.message); }
+      await closeAllAlertWindows();
+      sendResponse({ ok: true });
+    })();
+    return true;
+  }
+  if (msg.type === 'closeAllAlertWindows') {
+    // 仅关闭所有 alert 弹窗（不标记已读），供「关闭」按钮清理残留窗口
+    closeAllAlertWindows().then(() => sendResponse({ ok: true }))
+      .catch(e => sendResponse({ ok: false, err: e.message }));
     return true;
   }
   if (msg.type === 'uiLog') {
