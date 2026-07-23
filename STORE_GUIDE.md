@@ -73,13 +73,13 @@
 - 扩展功能依赖用户自己在 `xueqiu.com` 的登录态；公开发布后，未配置企微的用户仅使用本机提醒功能（属正常设计）。
 - 雪球 API 为半公开接口，若雪球未来调整接口或加强风控，可能影响扩展运行——这是所有非官方客户端共有的风险。
 
-## 九、作者信息（发布前替换占位符）
+## 九、作者信息
 
-署名「下一站澳门」、年份 2026 已填好。以下占位符仍需替换（均由用户提供）：
+署名、邮箱、GitHub URL、微博链接**已全部回填真实值，无残留占位符**（整理于 2026-07-22/23，详见 `HANDOFF.md` 第 12 节）：
 
-- `manifest.json` → `author.email` = `{{CONTACT_EMAIL}}` / `author.url` = `{{GITHUB_URL}}`
-- `options.html` → 关于区块的 `{{GITHUB_URL}}`（GitHub 仓库/主页链接）
-- `LICENSE` → `{{CONTACT_EMAIL}}`
-- `PRIVACY.md` → `{{CONTACT_EMAIL}}`
+- **作者署名**：下一站澳门（设置页关于区块显示「微博@下一站澳门」并带超链接跳微博主页）
+- **邮箱**：`cheung.cn@gmail.com`（`manifest.author.email` / `LICENSE` / `PRIVACY.md` 联系处）
+- **GitHub 源码**：`https://github.com/JohnWish1590/xueqiu-special-follow-notifier`（`manifest.author.url` / 设置页「源码：」一行）
+- **微博**：`@下一站澳门`（`https://weibo.com/u/7708742647`），写在 `PRIVACY.md` 联系处与设置页作者超链
 
-> 微博 @下一站澳门 已作为展示项写入「关于」与隐私政策，无需 URL 占位。
+> 2026-08-01 新规要求的数据用途披露已在 `PRIVACY.md` 第五、六节对应，无需额外改动。
