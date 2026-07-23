@@ -1,7 +1,7 @@
-# 交接文档：雪球特别关注 新帖提醒（Chrome 扩展 / Manifest V3）
+# 交接文档：雪哨（xueqiu-watch）（Chrome 扩展 / Manifest V3）
 
 > **用途**：本文档供**接手本项目的下一位 AI / 开发者**阅读，目标是「无需追问即可继续开发、测试、发布」。
-> **整理时间**：2026-07-23 ｜ **整理人**：WorkBuddy（嘎嘎姑）｜ **当前版本**：1.2.2
+> **整理时间**：2026-07-23 ｜ **整理人**：WorkBuddy（嘎嘎姑）｜ **当前版本**：1.3.0
 > **配套文档**：`README.md`（给用户看的使用说明）、`STORE_GUIDE.md`（上架清单）、`PRIVACY.md`（隐私政策）、`LICENSE`（版权）。本文档是「工程交接视角」，与前几份互补。
 
 ---
@@ -9,7 +9,7 @@
 ## 0. 速览（30 秒）
 
 - **它是什么**：一个 Chrome 扩展，监控你在雪球（xueqiu.com）「特别关注」分组里的博主，他们一发新帖，就**在本机弹系统通知 + 右侧磁吸常驻小窗 + 可选提示音**，并可选地**推送到你的个人微信**（企业微信自建应用）。
-- **当前版本**：`1.2.2`（Manifest V3）。
+- **当前版本**：`1.3.0`（Manifest V3）。
 - **GitHub 仓库（public）**：`https://github.com/JohnWish1590/xueqiu-watch`
 - **本地路径**：`C:\Users\user\WorkBuddy\2026-07-20-13-33-18\xueqiu-chrome-extension\`
 - **完成度**：功能完整、关键 bug 已修、可打包上架。上架还差两件事：① 把 `PRIVACY.md` 托管成可访问的 URL（Gist/Pages）填进商店后台；② 用户付 $5 开发者注册费。
@@ -203,7 +203,7 @@ chrome.alarms('poll') 每 N 分钟触发
 
 ## 9. 配置与权限（manifest.json）
 
-- `manifest_version: 3`，`version: 1.2.2`。
+- `manifest_version: 3`，`version: 1.3.0`。
 - `permissions`: `alarms, notifications, storage, offscreen, windows, tabs, scripting, system.display`。
 - `host_permissions`: `https://xueqiu.com/*`、`https://*.xueqiu.com/*`、`https://qyapi.weixin.qq.com/*`。
 - `author`: `{ email: "cheung.cn@gmail.com", url: "https://github.com/JohnWish1590/xueqiu-watch" }`。
